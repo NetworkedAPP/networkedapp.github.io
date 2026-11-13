@@ -19,7 +19,8 @@
     --body: 'Poppins','Segoe UI',Arial,sans-serif;
   }
   *{box-sizing:border-box;margin:0;padding:0}
-  html,body{width:100%;height:100%;overflow:hidden;background:var(--night);color:#fff;font-family:var(--body);cursor:none}
+  html,body{width:100%;height:100%;overflow:hidden;background:var(--night);color:#fff;font-family:var(--body)}
+  html.idle,html.idle *{cursor:none!important}
 
   /* ---------- FONDO: noche con atardecer en el horizonte ---------- */
   .sky{position:fixed;inset:0;
@@ -296,6 +297,13 @@ function tick(){ var d = new Date(),
   M = ['ENERO','FEBRERO','MARZO','ABRIL','MAYO','JUNIO','JULIO','AGOSTO','SEPTIEMBRE','OCTUBRE','NOVIEMBRE','DICIEMBRE'];
   document.getElementById('clock').textContent = D[d.getDay()] + ' ' + d.getDate() + ' DE ' + M[d.getMonth()]; }
 tick(); setInterval(tick, 60000);
+
+/* --- el cursor solo se ve cuando mueves el mouse (se oculta a los 3 segundos) --- */
+var idleT;
+function wake(){ document.documentElement.classList.remove('idle'); clearTimeout(idleT);
+  idleT = setTimeout(function(){ document.documentElement.classList.add('idle'); }, 3000); }
+addEventListener('mousemove', wake); addEventListener('mousedown', wake);
+wake();
 </script>
 </body>
 </html>
