@@ -166,10 +166,23 @@
   #permScreen h1{color:var(--accent);font-size:22px;margin-bottom:8px;}
   #permScreen p{color:var(--muted);font-size:14px;max-width:320px;line-height:1.5;}
   #permScreen button{
-    margin-top:22px;background:var(--accent);color:#06201b;border:none;
+    margin-top:14px;background:var(--accent);color:#06201b;border:none;
     padding:14px 28px;border-radius:14px;font-weight:700;font-size:15px;
   }
+  #permScreen button.secondary-perm{
+    background:rgba(255,255,255,0.1);color:var(--text);
+    border:1px solid rgba(255,255,255,0.2);
+  }
   #permScreen .err{color:var(--accent2);font-size:13px;margin-top:14px;max-width:320px;}
+
+  /* Fondo cuando se usa sin cámara */
+  #frame.no-camera{
+    background:linear-gradient(160deg,#0d0d14,#000);
+  }
+  [data-cam-off] #btnRotate, [data-cam-off] #btnFlipCam,
+  [data-cam-off] #cameraSelect, [data-cam-off] #btnRecord{
+    opacity:0.4;pointer-events:none;
+  }
 
   select{
     background:var(--panel);color:var(--text);border:1px solid rgba(255,255,255,0.15);
@@ -220,17 +233,19 @@
 <body>
 <div id="app">
 
-  <!-- Pantalla inicial: pedir permiso de cámara -->
+  <!-- Pantalla inicial: elegir si usar cámara o solo el texto -->
   <div id="permScreen">
     <h1>Teleprompter</h1>
-    <p>Esta app usa tu cámara para que grabes mientras el texto se desplaza encima, como un teleprompter real. Dale permiso de cámara a tu navegador para empezar.</p>
-    <button id="btnStartCam">Activar cámara y empezar</button>
+    <p>Puedes usarlo con tu cámara (para grabar mientras lees) o solo como texto que se desplaza, sin cámara.</p>
+    <button id="btnStartCam">📷 Activar cámara y empezar</button>
+    <button id="btnNoCam" class="secondary-perm">📝 Usar sin cámara</button>
     <div class="err" id="camErr" style="display:none;"></div>
   </div>
 
   <div id="topBar">
     <div class="brand">JohnHansenSP · Teleprompter</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button id="btnToggleCam" title="Activar o quitar la cámara">📷 Cámara: ON</button>
       <button id="btnRotate" title="Rotar la imagen de la cámara">🔁 Rotar</button>
       <button id="btnMirror" title="Espejar texto (para vidrio de teleprompter)">🪞 Espejo</button>
       <button id="btnEdit" title="Editar guion">✏️ Guion</button>
@@ -316,6 +331,8 @@
 
   const permScreen = document.getElementById('permScreen');
   const btnStartCam = document.getElementById('btnStartCam');
+  const btnNoCam = document.getElementById('btnNoCam');
+  const btnToggleCam = document.getElementById('btnToggleCam');
   const camErr = document.getElementById('camErr');
   const cameraSelect = document.getElementById('cameraSelect');
   const formatSelect = document.getElementById('formatSelect');
@@ -353,6 +370,7 @@
   let currentStream = null;
   let videoDevices = [];
   let currentDeviceIndex = 0;
+  let cameraEnabled = true;
   let isPlaying = false;
   let posY = 0;
   let lastTime = null;
@@ -403,12 +421,49 @@
     }
   }
 
+  function stopCamera(){
+    if(currentStream){
+      currentStream.getTracks().forEach(t => t.stop());
+      currentStream = null;
+    }
+    video.srcObject = null;
+  }
+
+  function setCameraEnabled(enabled){
+    cameraEnabled = enabled;
+    frame.classList.toggle('no-camera', !enabled);
+    document.body.toggleAttribute('data-cam-off', !enabled);
+    btnToggleCam.textContent = enabled ? '📷 Cámara: ON' : '📷 Cámara: OFF';
+    try{ localStorage.setItem('tp_cam_enabled', enabled ? '1' : '0'); }catch(e){}
+    if(!enabled){
+      stopCamera();
+    }
+  }
+
   btnStartCam.addEventListener('click', async () => {
     camErr.style.display = 'none';
     const ok = await startCamera(null);
     if(ok){
+      setCameraEnabled(true);
       permScreen.style.display = 'none';
       requestAnimationFrame(renderLoop);
+    }
+  });
+
+  btnNoCam.addEventListener('click', () => {
+    setCameraEnabled(false);
+    permScreen.style.display = 'none';
+    requestAnimationFrame(renderLoop);
+  });
+
+  btnToggleCam.addEventListener('click', async () => {
+    if(cameraEnabled){
+      setCameraEnabled(false);
+    }else{
+      camErr.style.display = 'none';
+      const ok = await startCamera(videoDevices[currentDeviceIndex] ? videoDevices[currentDeviceIndex].deviceId : null);
+      if(ok){ setCameraEnabled(true); }
+      else{ alert('No se pudo activar la cámara. Revisa los permisos del navegador.'); }
     }
   });
 
@@ -456,7 +511,10 @@
 
   function drawFrame(){
     const cw = canvas.width, ch = canvas.height;
-    if(!video.videoWidth || !video.videoHeight){ return; }
+    if(!cameraEnabled || !video.videoWidth || !video.videoHeight){
+      ctx.clearRect(0,0,cw,ch);
+      return;
+    }
 
     // Dimensiones del video tal como queda tras rotarlo (90/270 intercambia ancho y alto)
     const rotated = (rotationDeg === 90 || rotationDeg === 270);
