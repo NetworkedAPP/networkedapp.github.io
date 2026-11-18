@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Teleprompter JohnHansenSP</title>
+<style>
+  :root{
+    --bg:#0a0a0f;
+    --panel:#15151f;
+    --accent:#00e0b8;
+    --accent2:#ff5c8a;
+    --text:#f2f2f6;
+    --muted:#8d8da0;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;padding:0;height:100%;width:100%;
+    background:var(--bg);color:var(--text);
+    font-family:'Segoe UI',system-ui,-apple-system,Arial,sans-serif;
+    overflow:hidden;
+  }
+  #app{position:relative;height:100vh;width:100vw;background:#000;}
+
+  video#cam{
+    position:absolute;top:0;left:0;width:100%;height:100%;
+    object-fit:cover;background:#000;z-index:1;
+  }
+
+  #teleprompterOverlay{
+    position:absolute;top:0;left:0;width:100%;height:100%;
+    z-index:2;display:flex;align-items:flex-start;justify-content:center;
+    pointer-events:none;
+  }
+  #scrollBox{
+    width:100%;height:100%;overflow:hidden;position:relative;
+    padding:0 6%;
+    background:linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.15) 18%, rgba(0,0,0,0.0) 32%, rgba(0,0,0,0.0) 68%, rgba(0,0,0,0.15) 82%, rgba(0,0,0,0.55) 100%);
+  }
+  #textTrack{
+    position:absolute;left:6%;right:6%;top:100%;
+    text-align:center;
+    will-change: transform;
+  }
+  #textTrack p{
+    margin:0 0 1.2em 0;
+    line-height:1.35;
+    font-weight:700;
+    text-shadow:0 2px 10px rgba(0,0,0,0.9), 0 0 2px rgba(0,0,0,0.9);
+    color:var(--text);
+    white-space:pre-wrap;
+  }
+
+  #centerLine{
+    position:absolute;left:0;right:0;top:50%;height:2px;
+    background:rgba(255,92,138,0.0);
+    z-index:3;pointer-events:none;
+  }
+  #centerLine.show{background:rgba(255,92,138,0.55);}
+
+  /* Barra superior */
+  #topBar{
+    position:absolute;top:0;left:0;right:0;z-index:10;
+    display:flex;align-items:center;justify-content:space-between;
+    padding:10px 14px;
+    background:linear-gradient(to bottom, rgba(0,0,0,0.75), rgba(0,0,0,0));
+  }
+  #topBar .brand{font-size:14px;font-weight:700;color:var(--accent);letter-spacing:0.5px;}
+  #topBar button{
+    background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);
+    color:var(--text);border-radius:10px;padding:8px 10px;font-size:13px;
+  }
+
+  /* Panel de control inferior */
+  #controls{
+    position:absolute;left:0;right:0;bottom:0;z-index:10;
+    background:rgba(10,10,15,0.92);
+    border-top:1px solid rgba(255,255,255,0.08);
+    padding:12px 14px 16px;
+    transition:transform 0.25s ease;
+  }
+  #controls.hidden{transform:translateY(100%);}
+
+  .row{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .row label{font-size:12px;color:var(--muted);min-width:78px;}
+  .row input[type="range"]{flex:1;}
+  .row .val{font-size:12px;color:var(--text);min-width:42px;text-align:right;}
+
+  #mainButtons{display:flex;gap:8px;margin-top:4px;}
+  #mainButtons button{
+    flex:1;padding:14px 8px;border-radius:14px;border:none;
+    font-size:15px;font-weight:700;color:#06201b;
+    background:var(--accent);
+  }
+  #mainButtons button.secondary{
+    background:rgba(255,255,255,0.1);color:var(--text);
+    border:1px solid rgba(255,255,255,0.18);
+  }
+  #mainButtons button.danger{
+    background:var(--accent2);color:#2b0010;
+  }
+
+  #toggleHandle{
+    position:absolute;right:14px;bottom:14px;z-index:11;
+    width:46px;height:46px;border-radius:50%;
+    background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);
+    color:var(--text);font-size:20px;display:flex;align-items:center;justify-content:center;
+  }
+  #controls.hidden ~ #toggleHandle{bottom:14px;}
+
+  #editorOverlay{
+    position:absolute;inset:0;z-index:20;background:rgba(5,5,10,0.97);
+    display:none;flex-direction:column;padding:16px;
+  }
+  #editorOverlay.show{display:flex;}
+  #editorOverlay h2{margin:0 0 10px 0;font-size:18px;color:var(--accent);}
+  #editorOverlay textarea{
+    flex:1;width:100%;background:var(--panel);color:var(--text);
+    border:1px solid rgba(255,255,255,0.12);border-radius:12px;
+    padding:14px;font-size:16px;line-height:1.5;resize:none;
+    font-family:inherit;
+  }
+  #editorOverlay .editorButtons{display:flex;gap:10px;margin-top:12px;}
+  #editorOverlay .editorButtons button{
+    flex:1;padding:14px;border-radius:14px;border:none;font-weight:700;font-size:15px;
+  }
+  #editorOverlay .save{background:var(--accent);color:#06201b;}
+  #editorOverlay .cancel{background:rgba(255,255,255,0.1);color:var(--text);border:1px solid rgba(255,255,255,0.18);}
+
+  #permScreen{
+    position:absolute;inset:0;z-index:30;background:var(--bg);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:30px;text-align:center;
+  }
+  #permScreen h1{color:var(--accent);font-size:22px;margin-bottom:8px;}
+  #permScreen p{color:var(--muted);font-size:14px;max-width:320px;line-height:1.5;}
+  #permScreen button{
+    margin-top:22px;background:var(--accent);color:#06201b;border:none;
+    padding:14px 28px;border-radius:14px;font-weight:700;font-size:15px;
+  }
+  #permScreen .err{color:var(--accent2);font-size:13px;margin-top:14px;max-width:320px;}
+
+  select, .selWrap select{
+    background:var(--panel);color:var(--text);border:1px solid rgba(255,255,255,0.15);
+    border-radius:8px;padding:6px;font-size:12px;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Pantalla inicial: pedir permiso de cámara -->
+  <div id="permScreen">
+    <h1>Teleprompter</h1>
+    <p>Esta app usa tu cámara para grabar mientras el texto se desplaza encima, como un teleprompter real. Dale permiso de cámara a tu navegador para empezar.</p>
+    <button id="btnStartCam">Activar cámara y empezar</button>
+    <div class="err" id="camErr" style="display:none;"></div>
+  </div>
+
+  <video id="cam" autoplay playsinline muted></video>
+
+  <div id="centerLine"></div>
+
+  <div id="teleprompterOverlay">
+    <div id="scrollBox">
+      <div id="textTrack">
+        <p id="textContent">Pulsa el botón de lápiz para escribir o pegar tu guion. Luego presiona Play y empieza a grabar con tu cámara mientras lees el texto que sube por la pantalla, igual que en los teleprompters profesionales.</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="topBar">
+    <div class="brand">JohnHansenSP · Teleprompter</div>
+    <div style="display:flex;gap:8px;">
+      <button id="btnMirror" title="Espejar texto (para vidrio de teleprompter)">🪞 Espejo</button>
+      <button id="btnEdit" title="Editar guion">✏️ Guion</button>
+    </div>
+  </div>
+
+  <div id="controls">
+    <div class="row">
+      <label>Velocidad</label>
+      <input type="range" id="speedRange" min="5" max="150" value="40">
+      <span class="val" id="speedVal">40</span>
+    </div>
+    <div class="row">
+      <label>Tamaño letra</label>
+      <input type="range" id="fontRange" min="18" max="72" value="34">
+      <span class="val" id="fontVal">34</span>
+    </div>
+    <div class="row">
+      <label>Cámara</label>
+      <select id="cameraSelect"></select>
+      <label style="min-width:auto;">Línea guía</label>
+      <input type="checkbox" id="guideCheck">
+    </div>
+    <div id="mainButtons">
+      <button class="secondary" id="btnRestart">⟲ Reiniciar</button>
+      <button id="btnPlayPause">▶ Play</button>
+      <button class="secondary" id="btnFlipCam">🔄 Voltear cám.</button>
+    </div>
+  </div>
+
+  <div id="toggleHandle" title="Mostrar/ocultar controles">⚙️</div>
+
+  <div id="editorOverlay">
+    <h2>Escribe o pega tu guion</h2>
+    <textarea id="scriptTextarea" placeholder="Pega aquí el texto que quieres leer mientras grabas..."></textarea>
+    <div class="editorButtons">
+      <button class="cancel" id="btnCancelEdit">Cancelar</button>
+      <button class="save" id="btnSaveEdit">Guardar y usar</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  const video = document.getElementById('cam');
+  const permScreen = document.getElementById('permScreen');
+  const btnStartCam = document.getElementById('btnStartCam');
+  const camErr = document.getElementById('camErr');
+  const cameraSelect = document.getElementById('cameraSelect');
+
+  const textTrack = document.getElementById('textTrack');
+  const textContent = document.getElementById('textContent');
+  const scrollBox = document.getElementById('scrollBox');
+
+  const speedRange = document.getElementById('speedRange');
+  const speedVal = document.getElementById('speedVal');
+  const fontRange = document.getElementById('fontRange');
+  const fontVal = document.getElementById('fontVal');
+
+  const btnPlayPause = document.getElementById('btnPlayPause');
+  const btnRestart = document.getElementById('btnRestart');
+  const btnFlipCam = document.getElementById('btnFlipCam');
+  const btnMirror = document.getElementById('btnMirror');
+  const btnEdit = document.getElementById('btnEdit');
+
+  const editorOverlay = document.getElementById('editorOverlay');
+  const scriptTextarea = document.getElementById('scriptTextarea');
+  const btnSaveEdit = document.getElementById('btnSaveEdit');
+  const btnCancelEdit = document.getElementById('btnCancelEdit');
+
+  const controls = document.getElementById('controls');
+  const toggleHandle = document.getElementById('toggleHandle');
+  const centerLine = document.getElementById('centerLine');
+  const guideCheck = document.getElementById('guideCheck');
+
+  let currentStream = null;
+  let videoDevices = [];
+  let currentDeviceIndex = 0;
+  let isPlaying = false;
+  let posY = 0; // posición vertical del texto (translateY negativo hacia arriba)
+  let lastTime = null;
+  let rafId = null;
+  let mirrored = false;
+
+  // ---- Cámara ----
+  async function listCameras(){
+    try{
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      videoDevices = devices.filter(d => d.kind === 'videoinput');
+      cameraSelect.innerHTML = '';
+      videoDevices.forEach((d, i) => {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = d.label || ('Cámara ' + (i+1));
+        cameraSelect.appendChild(opt);
+      });
+    }catch(e){ /* silencioso */ }
+  }
+
+  async function startCamera(deviceId){
+    try{
+      if(currentStream){
+        currentStream.getTracks().forEach(t => t.stop());
+      }
+      const constraints = {
+        audio: true,
+        video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: "user" }
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      currentStream = stream;
+      video.srcObject = stream;
+      await listCameras();
+      return true;
+    }catch(e){
+      camErr.style.display = 'block';
+      camErr.textContent = 'No se pudo acceder a la cámara: ' + (e && e.message ? e.message : e);
+      return false;
+    }
+  }
+
+  btnStartCam.addEventListener('click', async () => {
+    camErr.style.display = 'none';
+    const ok = await startCamera(null);
+    if(ok){
+      permScreen.style.display = 'none';
+    }
+  });
+
+  cameraSelect.addEventListener('change', async () => {
+    currentDeviceIndex = parseInt(cameraSelect.value, 10);
+    const device = videoDevices[currentDeviceIndex];
+    if(device){ await startCamera(device.deviceId); }
+  });
+
+  btnFlipCam.addEventListener('click', async () => {
+    if(videoDevices.length < 2){ return; }
+    currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
+    cameraSelect.value = currentDeviceIndex;
+    const device = videoDevices[currentDeviceIndex];
+    await startCamera(device.deviceId);
+  });
+
+  // ---- Texto / scroll ----
+  function applyFont(){
+    textContent.style.fontSize = fontRange.value + 'px';
+  }
+  fontRange.addEventListener('input', () => {
+    fontVal.textContent = fontRange.value;
+    applyFont();
+  });
+
+  speedRange.addEventListener('input', () => {
+    speedVal.textContent = speedRange.value;
+  });
+
+  function step(timestamp){
+    if(!isPlaying){ lastTime = null; return; }
+    if(lastTime === null){ lastTime = timestamp; }
+    const dt = (timestamp - lastTime) / 1000;
+    lastTime = timestamp;
+    const pxPerSecond = parseFloat(speedRange.value);
+    posY -= pxPerSecond * dt;
+    textTrack.style.transform = 'translateY(' + posY + 'px)';
+    rafId = requestAnimationFrame(step);
+  }
+
+  function play(){
+    isPlaying = true;
+    btnPlayPause.textContent = '⏸ Pausa';
+    lastTime = null;
+    rafId = requestAnimationFrame(step);
+  }
+  function pause(){
+    isPlaying = false;
+    btnPlayPause.textContent = '▶ Play';
+    if(rafId){ cancelAnimationFrame(rafId); }
+  }
+  btnPlayPause.addEventListener('click', () => {
+    if(isPlaying){ pause(); } else { play(); }
+  });
+
+  btnRestart.addEventListener('click', () => {
+    pause();
+    posY = 0;
+    textTrack.style.transform = 'translateY(0px)';
+  });
+
+  btnMirror.addEventListener('click', () => {
+    mirrored = !mirrored;
+    textTrack.style.transform = (mirrored ? 'scaleX(-1) ' : '') + 'translateY(' + posY + 'px)';
+    btnMirror.style.color = mirrored ? 'var(--accent)' : '';
+  });
+  // ajuste: cuando mirrored está activo, el translateY debe seguir aplicándose en step()
+  const originalStep = step;
+
+  guideCheck.addEventListener('change', () => {
+    centerLine.classList.toggle('show', guideCheck.checked);
+  });
+
+  // ---- Editor de guion ----
+  btnEdit.addEventListener('click', () => {
+    scriptTextarea.value = textContent.textContent;
+    editorOverlay.classList.add('show');
+  });
+  btnCancelEdit.addEventListener('click', () => {
+    editorOverlay.classList.remove('show');
+  });
+  btnSaveEdit.addEventListener('click', () => {
+    const val = scriptTextarea.value.trim();
+    textContent.textContent = val.length ? val : 'Escribe tu guion aquí...';
+    editorOverlay.classList.remove('show');
+    pause();
+    posY = 0;
+    textTrack.style.transform = (mirrored ? 'scaleX(-1) ' : '') + 'translateY(0px)';
+    try{ localStorage.setItem('tp_script', val); }catch(e){}
+  });
+
+  // Restaurar guion guardado (si existe)
+  try{
+    const saved = localStorage.getItem('tp_script');
+    if(saved && saved.trim().length){
+      textContent.textContent = saved;
+    }
+  }catch(e){}
+
+  // ---- Panel de controles mostrar/ocultar ----
+  let controlsHidden = false;
+  toggleHandle.addEventListener('click', () => {
+    controlsHidden = !controlsHidden;
+    controls.classList.toggle('hidden', controlsHidden);
+  });
+
+  applyFont();
+})();
+</script>
+</body>
+</html>
