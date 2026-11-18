@@ -20,18 +20,31 @@
     font-family:'Segoe UI',system-ui,-apple-system,Arial,sans-serif;
     overflow:hidden;
   }
-  #app{position:relative;height:100vh;height:100dvh;width:100vw;background:#000;}
+  #app{position:relative;height:100vh;height:100dvh;width:100vw;background:#000;
+    display:flex;flex-direction:column;}
 
-  video#cam{
-    position:absolute;top:50%;left:50%;width:100%;height:100%;
-    object-fit:cover;background:#000;z-index:1;
-    transform-origin:center center;
-    transform:translate(-50%,-50%) rotate(0deg);
+  /* Zona donde vive la cámara, entre la barra de arriba y el panel de abajo */
+  #stage{
+    position:relative;flex:1;min-height:0;
+    display:flex;align-items:center;justify-content:center;
+    background:#000;overflow:hidden;
   }
-  /* Cuando el video queda rotado 90 o 270, intercambiamos el ancho/alto
-     para que siga llenando la pantalla sin verse chiquito o estirado */
-  video#cam.rot-90, video#cam.rot-270{
-    width:100vh; height:100vw;
+
+  /* El "marco" de grabación: cambia de forma según el formato elegido */
+  #frame{
+    position:relative;background:#000;overflow:hidden;
+    max-width:100%;max-height:100%;
+  }
+  #frame.fmt-full{width:100%;height:100%;}
+  #frame.fmt-vertical{aspect-ratio:9/16;height:100%;width:auto;}
+  #frame.fmt-horizontal{aspect-ratio:16/9;width:100%;height:auto;}
+  #frame.fmt-square{aspect-ratio:1/1;height:100%;width:auto;}
+
+  video#cam{ position:absolute; top:-9999px; left:-9999px; } /* fuente oculta, solo para leer frames */
+
+  canvas#previewCanvas{
+    position:absolute;top:0;left:0;width:100%;height:100%;
+    display:block;background:#000;z-index:1;
   }
 
   #teleprompterOverlay{
@@ -65,12 +78,22 @@
   }
   #centerLine.show{background:rgba(255,92,138,0.55);}
 
+  #recDot{
+    position:absolute;top:10px;left:10px;z-index:4;
+    display:none;align-items:center;gap:6px;
+    background:rgba(0,0,0,0.55);border-radius:20px;padding:5px 10px 5px 8px;
+  }
+  #recDot.show{display:flex;}
+  #recDot .dot{width:10px;height:10px;border-radius:50%;background:var(--accent2);animation:blink 1s infinite;}
+  #recDot span{font-size:12px;font-weight:700;}
+  @keyframes blink{0%,100%{opacity:1;}50%{opacity:0.25;}}
+
   /* Barra superior */
   #topBar{
-    position:absolute;top:0;left:0;right:0;z-index:10;
+    position:relative;z-index:10;flex:none;
     display:flex;align-items:center;justify-content:space-between;
     padding:10px 14px;
-    background:linear-gradient(to bottom, rgba(0,0,0,0.75), rgba(0,0,0,0));
+    background:#0d0d14;
   }
   #topBar .brand{font-size:14px;font-weight:700;color:var(--accent);letter-spacing:0.5px;}
   #topBar button{
@@ -80,40 +103,41 @@
 
   /* Panel de control inferior */
   #controls{
-    position:absolute;left:0;right:0;bottom:0;z-index:10;
-    background:rgba(10,10,15,0.92);
+    position:relative;z-index:10;flex:none;
+    background:rgba(10,10,15,0.96);
     border-top:1px solid rgba(255,255,255,0.08);
     padding:12px 14px 16px;
-    transition:transform 0.25s ease;
+    transition:max-height 0.25s ease, padding 0.25s ease;
+    max-height:400px;overflow:hidden;
   }
-  #controls.hidden{transform:translateY(100%);}
+  #controls.hidden{max-height:0;padding-top:0;padding-bottom:0;border-top-color:transparent;}
 
-  .row{display:flex;align-items:center;gap:10px;margin-bottom:10px;}
+  .row{display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap;}
   .row label{font-size:12px;color:var(--muted);min-width:78px;}
-  .row input[type="range"]{flex:1;}
-  .row .val{font-size:12px;color:var(--text);min-width:42px;text-align:right;}
+  .row input[type="range"]{flex:1;min-width:80px;}
+  .row .val{font-size:12px;color:var(--text);min-width:32px;text-align:right;}
 
   #mainButtons{display:flex;gap:8px;margin-top:4px;}
-  #mainButtons button{
+  #recButtons{display:flex;gap:8px;margin-top:8px;}
+  #mainButtons button, #recButtons button{
     flex:1;padding:14px 8px;border-radius:14px;border:none;
     font-size:15px;font-weight:700;color:#06201b;
     background:var(--accent);
   }
-  #mainButtons button.secondary{
+  #mainButtons button.secondary, #recButtons button.secondary{
     background:rgba(255,255,255,0.1);color:var(--text);
     border:1px solid rgba(255,255,255,0.18);
   }
-  #mainButtons button.danger{
+  #mainButtons button.danger, #recButtons button.danger{
     background:var(--accent2);color:#2b0010;
   }
 
   #toggleHandle{
     position:absolute;right:14px;bottom:14px;z-index:11;
     width:46px;height:46px;border-radius:50%;
-    background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);
+    background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.25);
     color:var(--text);font-size:20px;display:flex;align-items:center;justify-content:center;
   }
-  #controls.hidden ~ #toggleHandle{bottom:14px;}
 
   #editorOverlay{
     position:absolute;inset:0;z-index:20;background:rgba(5,5,10,0.97);
@@ -147,9 +171,20 @@
   }
   #permScreen .err{color:var(--accent2);font-size:13px;margin-top:14px;max-width:320px;}
 
-  select, .selWrap select{
+  select{
     background:var(--panel);color:var(--text);border:1px solid rgba(255,255,255,0.15);
     border-radius:8px;padding:6px;font-size:12px;
+  }
+
+  #downloadBar{
+    display:none;align-items:center;gap:10px;justify-content:space-between;
+    background:rgba(0,224,184,0.12);border:1px solid rgba(0,224,184,0.4);
+    border-radius:12px;padding:10px 12px;margin-bottom:10px;font-size:13px;
+  }
+  #downloadBar.show{display:flex;}
+  #downloadBar a{
+    background:var(--accent);color:#06201b;text-decoration:none;
+    font-weight:700;padding:8px 12px;border-radius:10px;font-size:13px;
   }
 
   /* --- Formato vertical (celular en vertical, o ventana angosta) --- */
@@ -157,15 +192,8 @@
     #topBar .brand{font-size:12px;}
     #topBar button{padding:7px 8px;font-size:12px;}
     .row label{min-width:62px;font-size:11px;}
-    #mainButtons button{font-size:13px;padding:12px 6px;}
+    #mainButtons button, #recButtons button{font-size:13px;padding:12px 6px;}
     #controls{padding:10px 10px 14px;}
-    #cameraSelect, #controls select{max-width:110px;}
-  }
-
-  /* --- Formato horizontal muy bajo (ej. celular acostado) --- */
-  @media (orientation: landscape) and (max-height: 420px){
-    #controls .row{margin-bottom:6px;}
-    #mainButtons button{padding:10px 8px;font-size:13px;}
   }
 </style>
 </head>
@@ -175,33 +203,41 @@
   <!-- Pantalla inicial: pedir permiso de cámara -->
   <div id="permScreen">
     <h1>Teleprompter</h1>
-    <p>Esta app usa tu cámara para grabar mientras el texto se desplaza encima, como un teleprompter real. Dale permiso de cámara a tu navegador para empezar.</p>
+    <p>Esta app usa tu cámara para que grabes mientras el texto se desplaza encima, como un teleprompter real. Dale permiso de cámara a tu navegador para empezar.</p>
     <button id="btnStartCam">Activar cámara y empezar</button>
     <div class="err" id="camErr" style="display:none;"></div>
   </div>
 
-  <video id="cam" autoplay playsinline muted></video>
-
-  <div id="centerLine"></div>
-
-  <div id="teleprompterOverlay">
-    <div id="scrollBox">
-      <div id="textTrack">
-        <p id="textContent">Pulsa el botón de lápiz para escribir o pegar tu guion. Luego presiona Play y empieza a grabar con tu cámara mientras lees el texto que sube por la pantalla, igual que en los teleprompters profesionales.</p>
-      </div>
-    </div>
-  </div>
-
   <div id="topBar">
     <div class="brand">JohnHansenSP · Teleprompter</div>
-    <div style="display:flex;gap:8px;">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button id="btnRotate" title="Rotar la imagen de la cámara">🔁 Rotar</button>
       <button id="btnMirror" title="Espejar texto (para vidrio de teleprompter)">🪞 Espejo</button>
       <button id="btnEdit" title="Editar guion">✏️ Guion</button>
     </div>
   </div>
 
+  <div id="stage">
+    <div id="frame" class="fmt-vertical">
+      <video id="cam" autoplay playsinline muted></video>
+      <canvas id="previewCanvas"></canvas>
+      <div id="centerLine"></div>
+      <div id="recDot"><span class="dot"></span><span id="recTimer">00:00</span></div>
+      <div id="teleprompterOverlay">
+        <div id="scrollBox">
+          <div id="textTrack">
+            <p id="textContent">Pulsa el botón de lápiz para escribir o pegar tu guion. Luego presiona Play y empieza a grabar con tu cámara mientras lees el texto que sube por la pantalla, igual que en los teleprompters profesionales. Este texto no queda grabado en el video, solo tú lo ves mientras lees.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div id="controls">
+    <div id="downloadBar">
+      <span>Tu video quedó listo 🎬</span>
+      <a id="downloadLink" download="teleprompter.webm">⬇ Descargar video</a>
+    </div>
     <div class="row">
       <label>Velocidad</label>
       <input type="range" id="speedRange" min="5" max="150" value="40">
@@ -213,6 +249,15 @@
       <span class="val" id="fontVal">34</span>
     </div>
     <div class="row">
+      <label>Formato</label>
+      <select id="formatSelect">
+        <option value="vertical">Vertical 9:16 (Reels/TikTok)</option>
+        <option value="horizontal">Horizontal 16:9</option>
+        <option value="square">Cuadrado 1:1</option>
+        <option value="full">Pantalla completa</option>
+      </select>
+    </div>
+    <div class="row">
       <label>Cámara</label>
       <select id="cameraSelect"></select>
       <label style="min-width:auto;">Línea guía</label>
@@ -222,6 +267,9 @@
       <button class="secondary" id="btnRestart">⟲ Reiniciar</button>
       <button id="btnPlayPause">▶ Play</button>
       <button class="secondary" id="btnFlipCam">🔄 Voltear cám.</button>
+    </div>
+    <div id="recButtons">
+      <button class="danger" id="btnRecord">⏺ Grabar video</button>
     </div>
   </div>
 
@@ -241,14 +289,19 @@
 <script>
 (function(){
   const video = document.getElementById('cam');
+  const canvas = document.getElementById('previewCanvas');
+  const ctx = canvas.getContext('2d');
+  const frame = document.getElementById('frame');
+  const stage = document.getElementById('stage');
+
   const permScreen = document.getElementById('permScreen');
   const btnStartCam = document.getElementById('btnStartCam');
   const camErr = document.getElementById('camErr');
   const cameraSelect = document.getElementById('cameraSelect');
+  const formatSelect = document.getElementById('formatSelect');
 
   const textTrack = document.getElementById('textTrack');
   const textContent = document.getElementById('textContent');
-  const scrollBox = document.getElementById('scrollBox');
 
   const speedRange = document.getElementById('speedRange');
   const speedVal = document.getElementById('speedVal');
@@ -261,6 +314,7 @@
   const btnRotate = document.getElementById('btnRotate');
   const btnMirror = document.getElementById('btnMirror');
   const btnEdit = document.getElementById('btnEdit');
+  const btnRecord = document.getElementById('btnRecord');
 
   const editorOverlay = document.getElementById('editorOverlay');
   const scriptTextarea = document.getElementById('scriptTextarea');
@@ -271,15 +325,24 @@
   const toggleHandle = document.getElementById('toggleHandle');
   const centerLine = document.getElementById('centerLine');
   const guideCheck = document.getElementById('guideCheck');
+  const recDot = document.getElementById('recDot');
+  const recTimer = document.getElementById('recTimer');
+  const downloadBar = document.getElementById('downloadBar');
+  const downloadLink = document.getElementById('downloadLink');
 
   let currentStream = null;
   let videoDevices = [];
   let currentDeviceIndex = 0;
   let isPlaying = false;
-  let posY = 0; // posición vertical del texto (translateY negativo hacia arriba)
+  let posY = 0;
   let lastTime = null;
   let rafId = null;
   let mirrored = false;
+  let rotationDeg = 0;
+  try{
+    const savedRot = localStorage.getItem('tp_rotation');
+    if(savedRot){ rotationDeg = parseInt(savedRot, 10) || 0; }
+  }catch(e){}
 
   // ---- Cámara ----
   async function listCameras(){
@@ -308,6 +371,7 @@
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       currentStream = stream;
       video.srcObject = stream;
+      await video.play().catch(()=>{});
       await listCameras();
       return true;
     }catch(e){
@@ -322,6 +386,7 @@
     const ok = await startCamera(null);
     if(ok){
       permScreen.style.display = 'none';
+      requestAnimationFrame(renderLoop);
     }
   });
 
@@ -339,25 +404,64 @@
     await startCamera(device.deviceId);
   });
 
-  // ---- Rotar la imagen de la cámara (por si la cámara/software entrega el video girado) ----
-  let rotationDeg = 0;
-  try{
-    const savedRot = localStorage.getItem('tp_rotation');
-    if(savedRot){ rotationDeg = parseInt(savedRot, 10) || 0; }
-  }catch(e){}
-
-  function applyRotation(){
-    video.classList.remove('rot-90','rot-270');
-    if(rotationDeg === 90){ video.classList.add('rot-90'); }
-    if(rotationDeg === 270){ video.classList.add('rot-270'); }
-    video.style.transform = 'translate(-50%,-50%) rotate(' + rotationDeg + 'deg)';
-    try{ localStorage.setItem('tp_rotation', String(rotationDeg)); }catch(e){}
-  }
   btnRotate.addEventListener('click', () => {
     rotationDeg = (rotationDeg + 90) % 360;
-    applyRotation();
+    try{ localStorage.setItem('tp_rotation', String(rotationDeg)); }catch(e){}
   });
-  applyRotation();
+
+  // ---- Formato del marco de cámara ----
+  function applyFormat(fmt){
+    frame.classList.remove('fmt-vertical','fmt-horizontal','fmt-square','fmt-full');
+    frame.classList.add('fmt-' + fmt);
+    try{ localStorage.setItem('tp_format', fmt); }catch(e){}
+    resizeCanvas();
+  }
+  formatSelect.addEventListener('change', () => applyFormat(formatSelect.value));
+  try{
+    const savedFmt = localStorage.getItem('tp_format');
+    if(savedFmt){ formatSelect.value = savedFmt; }
+  }catch(e){}
+  applyFormat(formatSelect.value);
+
+  // ---- Lienzo: dibuja la cámara (con rotación/espejo/recorte) en el marco elegido ----
+  function resizeCanvas(){
+    const rect = frame.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.max(2, Math.round(rect.width * dpr));
+    canvas.height = Math.max(2, Math.round(rect.height * dpr));
+  }
+  window.addEventListener('resize', resizeCanvas);
+
+  function drawFrame(){
+    const cw = canvas.width, ch = canvas.height;
+    if(!video.videoWidth || !video.videoHeight){ return; }
+
+    // Dimensiones del video tal como queda tras rotarlo (90/270 intercambia ancho y alto)
+    const rotated = (rotationDeg === 90 || rotationDeg === 270);
+    const vw = rotated ? video.videoHeight : video.videoWidth;
+    const vh = rotated ? video.videoWidth : video.videoHeight;
+
+    // Recorte tipo "cover": llenar cw x ch manteniendo proporción de vw x vh
+    const scale = Math.max(cw / vw, ch / vh);
+    const drawW = vw * scale, drawH = vh * scale;
+
+    ctx.save();
+    ctx.clearRect(0,0,cw,ch);
+    ctx.translate(cw/2, ch/2);
+    if(mirrored){ ctx.scale(-1,1); }
+    ctx.rotate(rotationDeg * Math.PI/180);
+    // Tras rotate(), dibujamos usando las dimensiones ORIGINALES del video (antes de rotar)
+    const origDrawW = rotated ? drawH : drawW;
+    const origDrawH = rotated ? drawW : drawH;
+    ctx.drawImage(video, -origDrawW/2, -origDrawH/2, origDrawW, origDrawH);
+    ctx.restore();
+  }
+
+  function renderLoop(){
+    drawFrame();
+    rafId2 = requestAnimationFrame(renderLoop);
+  }
+  let rafId2 = null;
 
   // ---- Texto / scroll ----
   function applyFont(){
@@ -379,29 +483,29 @@
     lastTime = timestamp;
     const pxPerSecond = parseFloat(speedRange.value);
     posY -= pxPerSecond * dt;
-    textTrack.style.transform = 'translateY(' + posY + 'px)';
+    textTrack.style.transform = (mirrored ? 'scaleX(-1) ' : '') + 'translateY(' + posY + 'px)';
     rafId = requestAnimationFrame(step);
   }
 
-  function play(){
+  function playText(){
     isPlaying = true;
     btnPlayPause.textContent = '⏸ Pausa';
     lastTime = null;
     rafId = requestAnimationFrame(step);
   }
-  function pause(){
+  function pauseText(){
     isPlaying = false;
     btnPlayPause.textContent = '▶ Play';
     if(rafId){ cancelAnimationFrame(rafId); }
   }
   btnPlayPause.addEventListener('click', () => {
-    if(isPlaying){ pause(); } else { play(); }
+    if(isPlaying){ pauseText(); } else { playText(); }
   });
 
   btnRestart.addEventListener('click', () => {
-    pause();
+    pauseText();
     posY = 0;
-    textTrack.style.transform = 'translateY(0px)';
+    textTrack.style.transform = (mirrored ? 'scaleX(-1) ' : '') + 'translateY(0px)';
   });
 
   btnMirror.addEventListener('click', () => {
@@ -409,8 +513,6 @@
     textTrack.style.transform = (mirrored ? 'scaleX(-1) ' : '') + 'translateY(' + posY + 'px)';
     btnMirror.style.color = mirrored ? 'var(--accent)' : '';
   });
-  // ajuste: cuando mirrored está activo, el translateY debe seguir aplicándose en step()
-  const originalStep = step;
 
   guideCheck.addEventListener('change', () => {
     centerLine.classList.toggle('show', guideCheck.checked);
@@ -428,13 +530,12 @@
     const val = scriptTextarea.value.trim();
     textContent.textContent = val.length ? val : 'Escribe tu guion aquí...';
     editorOverlay.classList.remove('show');
-    pause();
+    pauseText();
     posY = 0;
     textTrack.style.transform = (mirrored ? 'scaleX(-1) ' : '') + 'translateY(0px)';
     try{ localStorage.setItem('tp_script', val); }catch(e){}
   });
 
-  // Restaurar guion guardado (si existe)
   try{
     const saved = localStorage.getItem('tp_script');
     if(saved && saved.trim().length){
@@ -447,6 +548,88 @@
   toggleHandle.addEventListener('click', () => {
     controlsHidden = !controlsHidden;
     controls.classList.toggle('hidden', controlsHidden);
+    toggleHandle.textContent = controlsHidden ? '⬆️' : '⚙️';
+  });
+
+  // ---- Grabar video (lo que se ve en el recuadro de cámara, SIN el texto del guion) ----
+  let mediaRecorder = null;
+  let recordedChunks = [];
+  let recordStartTime = 0;
+  let recTimerId = null;
+  let lastObjectUrl = null;
+
+  function pickMimeType(){
+    const options = [
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm'
+    ];
+    for(const opt of options){
+      if(window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(opt)){
+        return opt;
+      }
+    }
+    return '';
+  }
+
+  function updateRecTimer(){
+    const secs = Math.floor((Date.now() - recordStartTime) / 1000);
+    const mm = String(Math.floor(secs/60)).padStart(2,'0');
+    const ss = String(secs%60).padStart(2,'0');
+    recTimer.textContent = mm + ':' + ss;
+  }
+
+  function startRecording(){
+    if(!window.MediaRecorder){
+      alert('Tu navegador no soporta grabar video directamente. Puedes usar la grabadora de pantalla de tu celular o PC mientras lees el teleprompter.');
+      return;
+    }
+    const canvasStream = canvas.captureStream(30);
+    const audioTracks = currentStream ? currentStream.getAudioTracks() : [];
+    const combined = new MediaStream([...canvasStream.getVideoTracks(), ...audioTracks]);
+
+    recordedChunks = [];
+    const mimeType = pickMimeType();
+    try{
+      mediaRecorder = mimeType ? new MediaRecorder(combined, {mimeType}) : new MediaRecorder(combined);
+    }catch(e){
+      alert('No se pudo iniciar la grabación en este navegador.');
+      return;
+    }
+    mediaRecorder.ondataavailable = (e) => {
+      if(e.data && e.data.size > 0){ recordedChunks.push(e.data); }
+    };
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(recordedChunks, {type: mediaRecorder.mimeType || 'video/webm'});
+      if(lastObjectUrl){ URL.revokeObjectURL(lastObjectUrl); }
+      lastObjectUrl = URL.createObjectURL(blob);
+      downloadLink.href = lastObjectUrl;
+      downloadBar.classList.add('show');
+    };
+    mediaRecorder.start();
+    recordStartTime = Date.now();
+    recDot.classList.add('show');
+    recTimerId = setInterval(updateRecTimer, 500);
+    updateRecTimer();
+    btnRecord.textContent = '⏹ Detener grabación';
+    downloadBar.classList.remove('show');
+  }
+
+  function stopRecording(){
+    if(mediaRecorder && mediaRecorder.state !== 'inactive'){
+      mediaRecorder.stop();
+    }
+    recDot.classList.remove('show');
+    if(recTimerId){ clearInterval(recTimerId); recTimerId = null; }
+    btnRecord.textContent = '⏺ Grabar video';
+  }
+
+  btnRecord.addEventListener('click', () => {
+    if(mediaRecorder && mediaRecorder.state === 'recording'){
+      stopRecording();
+    }else{
+      startRecording();
+    }
   });
 
   applyFont();
