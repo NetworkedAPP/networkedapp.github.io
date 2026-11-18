@@ -195,6 +195,26 @@
     #mainButtons button, #recButtons button{font-size:13px;padding:12px 6px;}
     #controls{padding:10px 10px 14px;}
   }
+
+  /* --- Pantallas diminutas, como la pantalla de la tapa (cover screen) de un plegable --- */
+  @media (max-width: 420px){
+    #topBar{padding:6px 8px;}
+    #topBar .brand{font-size:10px;}
+    #topBar button{padding:5px 6px;font-size:11px;border-radius:8px;}
+    #controls{padding:6px 8px 10px;}
+    .row{gap:6px;margin-bottom:6px;}
+    .row label{min-width:50px;font-size:10px;}
+    .row .val{min-width:22px;font-size:11px;}
+    select{font-size:11px;padding:4px;}
+    #mainButtons, #recButtons{gap:5px;margin-top:4px;}
+    #mainButtons button, #recButtons button{font-size:11px;padding:9px 4px;border-radius:10px;}
+    #toggleHandle{width:36px;height:36px;font-size:16px;right:8px;bottom:8px;}
+    #textContent{font-size:16px !important;}
+  }
+  @media (max-width: 280px){
+    .row label{display:none;} /* en pantallas extremadamente angostas, solo dejamos los controles */
+    #topBar .brand{display:none;}
+  }
 </style>
 </head>
 <body>
@@ -366,7 +386,9 @@
       }
       const constraints = {
         audio: true,
-        video: deviceId ? { deviceId: { exact: deviceId } } : { facingMode: "user" }
+        video: deviceId
+          ? { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } }
+          : { facingMode: "user", width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } }
       };
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       currentStream = stream;
@@ -426,7 +448,7 @@
   // ---- Lienzo: dibuja la cámara (con rotación/espejo/recorte) en el marco elegido ----
   function resizeCanvas(){
     const rect = frame.getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
     canvas.width = Math.max(2, Math.round(rect.width * dpr));
     canvas.height = Math.max(2, Math.round(rect.height * dpr));
   }
